@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "outDir": "dist",
+  },
+  "extends": "../tsconfig.json",
+  "files": ["src/App.tsx", "src/main.tsx"],
+}

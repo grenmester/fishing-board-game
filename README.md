@@ -5,12 +5,12 @@
 Start the server first.
 
     cd server
-    node server.js
+    pnpm dev
 
 If you would like the server to automatically restart on code changes to the
 server, you can run it in watch mode.
 
-    node --watch server.js
+    pnpm watch
 
 After the server is started, you can start the client.
 

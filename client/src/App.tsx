@@ -1,24 +1,25 @@
 import React, { useEffect, useState } from "react";
+import type { ClientMessage, Room, ServerMessage } from "shared/types";
 
 const App = () => {
-  const [playerName, setPlayerName] = useState();
-  const [roomId, setRoomId] = useState();
+  const [playerName, setPlayerName] = useState<string>("");
+  const [roomId, setRoomId] = useState<string>("");
 
-  const [status, setStatus] = useState();
-  const [players, setPlayers] = useState();
-  const [gameState, setGameState] = useState();
+  const [status, setStatus] = useState<string>();
+  const [players, setPlayers] = useState<Room["players"]>();
+  const [gameState, setGameState] = useState<Room["gameState"]>();
 
   const [connected, setConnected] = useState(false);
-  const [joinGameError, setJoinGameError] = useState();
+  const [joinGameError, setJoinGameError] = useState<string>();
 
-  const wsRef = React.useRef();
+  const wsRef = React.useRef<WebSocket>();
 
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:3000");
     wsRef.current = ws;
 
-    ws.onmessage = (e) => {
-      const data = JSON.parse(e.data);
+    ws.onmessage = (e: MessageEvent<string>) => {
+      const data = JSON.parse(e.data) as ServerMessage;
       switch (data.type) {
         case "joinGameFailure":
           setJoinGameError(data.error);
@@ -38,26 +39,24 @@ const App = () => {
       }
     };
 
-    return () => ws.close();
+    return () => {
+      ws.close();
+    };
   }, []);
 
   const joinGame = () => {
-    wsRef.current.send(
-      JSON.stringify({
-        type: "joinGame",
-        playerName: playerName,
-        roomId: roomId,
-      }),
-    );
+    sendMessage({
+      type: "joinGame",
+      playerName: playerName,
+      roomId: roomId,
+    });
   };
 
   const startGame = () => {
-    wsRef.current.send(
-      JSON.stringify({
-        type: "startGame",
-        roomId: roomId,
-      }),
-    );
+    sendMessage({
+      type: "startGame",
+      roomId: roomId,
+    });
   };
 
   return (
@@ -69,7 +68,9 @@ const App = () => {
           <label>
             Player Name:
             <input
-              onChange={(e) => setPlayerName(e.target.value)}
+              onChange={(e) => {
+                setPlayerName(e.target.value);
+              }}
               placeholder="Enter your name"
               type="text"
               value={playerName}
@@ -78,7 +79,9 @@ const App = () => {
           <label>
             Room ID:
             <input
-              onChange={(e) => setRoomId(e.target.value)}
+              onChange={(e) => {
+                setRoomId(e.target.value);
+              }}
               placeholder="Enter the room ID"
               type="text"
               value={roomId}
@@ -101,6 +104,10 @@ const App = () => {
       )}
     </div>
   );
+
+  function sendMessage(message: ClientMessage) {
+    wsRef.current?.send(JSON.stringify(message));
+  }
 };
 
 export default App;
