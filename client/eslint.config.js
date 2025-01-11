@@ -47,5 +47,14 @@ export default tseslint.config(
       ...tseslint.configs.strictTypeChecked,
       ...tseslint.configs.stylisticTypeChecked,
     ],
+    rules: {
+      "@typescript-eslint/switch-exhaustiveness-check": [
+        "error",
+        {
+          allowDefaultCaseForExhaustiveSwitch: false,
+          requireDefaultForNonUnion: true,
+        },
+      ],
+    },
   },
 );

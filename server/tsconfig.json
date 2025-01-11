@@ -3,5 +3,5 @@
     "outDir": "dist",
   },
   "extends": "../tsconfig.json",
-  "files": ["server.ts"],
+  "include": ["server.ts", "../shared/*"],
 }

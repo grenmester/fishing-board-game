@@ -1,16 +1,28 @@
 import React, { useEffect, useState } from "react";
-import type { ClientMessage, Room, ServerMessage } from "shared/types";
+import { ClientMessageEnum, ServerMessageEnum } from "../../shared/enums";
+import type {
+  ClientMessage,
+  GameState,
+  GameSummary,
+  GameTurn,
+  Players,
+  ServerMessage,
+} from "shared/types";
+import LobbyScreen from "./LobbyScreen";
+import RoomScreen from "./RoomScreen";
+import GameScreen from "./GameScreen";
 
 const App = () => {
   const [playerName, setPlayerName] = useState<string>("");
   const [roomId, setRoomId] = useState<string>("");
 
-  const [status, setStatus] = useState<string>();
-  const [players, setPlayers] = useState<Room["players"]>();
-  const [gameState, setGameState] = useState<Room["gameState"]>();
+  const [screen, setScreen] = useState<"Lobby" | "Room" | "Game">("Lobby");
+  const [players, setPlayers] = useState<Players>({});
+  const [gameState, setGameState] = useState<GameState>();
+  const [gameTurn, setGameTurn] = useState<GameTurn>();
+  const [gameSummary, setGameSummary] = useState<GameSummary>();
 
-  const [connected, setConnected] = useState(false);
-  const [joinGameError, setJoinGameError] = useState<string>();
+  const [error, setError] = useState<string>();
 
   const wsRef = React.useRef<WebSocket>();
 
@@ -19,22 +31,38 @@ const App = () => {
     wsRef.current = ws;
 
     ws.onmessage = (e: MessageEvent<string>) => {
+      setError(undefined);
       const data = JSON.parse(e.data) as ServerMessage;
       switch (data.type) {
-        case "joinGameFailure":
-          setJoinGameError(data.error);
+        case ServerMessageEnum.JoinRoomFailure:
+        case ServerMessageEnum.StartGameFailure:
+        case ServerMessageEnum.MakeTurnFailure:
+          setError(data.error);
           break;
-        case "joinGameSuccess":
-          setConnected(true);
-          break;
-        case "updateRoom":
-          setStatus(data.roomState.status);
+        case ServerMessageEnum.CreateRoom:
+          setScreen("Room");
           setPlayers(data.roomState.players);
-          setGameState(data.roomState.gameState);
           break;
-        case "disconnect":
-          setConnected(false);
-          setJoinGameError(data.error);
+        case ServerMessageEnum.UpdateRoom:
+          setPlayers(data.roomState.players);
+          break;
+        case ServerMessageEnum.DeleteRoom:
+          setScreen("Lobby");
+          setPlayers({});
+          setError(data.error);
+          break;
+        case ServerMessageEnum.CreateGame:
+          setScreen("Game");
+          setGameState(data.gameState);
+          break;
+        case ServerMessageEnum.UpdateGame:
+          setGameState(data.gameState);
+          setGameTurn(data.gameTurn);
+          break;
+        case ServerMessageEnum.DeleteGame:
+          setScreen("Room");
+          setGameTurn(undefined);
+          setGameSummary(data.gameSummary);
           break;
       }
     };
@@ -44,9 +72,9 @@ const App = () => {
     };
   }, []);
 
-  const joinGame = () => {
+  const joinRoom = () => {
     sendMessage({
-      type: "joinGame",
+      type: ClientMessageEnum.JoinRoomRequest,
       playerName: playerName,
       roomId: roomId,
     });
@@ -54,60 +82,56 @@ const App = () => {
 
   const startGame = () => {
     sendMessage({
-      type: "startGame",
+      type: ClientMessageEnum.StartGameRequest,
       roomId: roomId,
     });
+  };
+
+  const makeTurn = () => {
+    sendMessage({
+      type: ClientMessageEnum.MakeTurnRequest,
+      roomId: roomId,
+    });
+  };
+
+  const sendMessage = (message: ClientMessage) => {
+    wsRef.current?.send(JSON.stringify(message));
   };
 
   return (
     <div>
       <h1>Fishing Board Game</h1>
-      {!connected ? (
-        <div>
-          <h2>Lobby</h2>
-          <label>
-            Player Name:
-            <input
-              onChange={(e) => {
-                setPlayerName(e.target.value);
-              }}
-              placeholder="Enter your name"
-              type="text"
-              value={playerName}
-            />
-          </label>
-          <label>
-            Room ID:
-            <input
-              onChange={(e) => {
-                setRoomId(e.target.value);
-              }}
-              placeholder="Enter the room ID"
-              type="text"
-              value={roomId}
-            />
-          </label>
-          <button onClick={joinGame}>Join Game</button>
-          {joinGameError && <p>Error: {joinGameError}</p>}
-        </div>
-      ) : (
-        <div>
-          <h2>Waiting Room</h2>
-          <p>Player Name: {playerName}</p>
-          <p>Room ID: {roomId}</p>
-          <p>Status: {status}</p>
-          <p>Player List: {JSON.stringify(players, null, 2)}</p>
-          <p>Game State: </p>
-          <pre>{JSON.stringify(gameState, null, 2)}</pre>
-          <button onClick={startGame}>Start Game</button>
-        </div>
+      {screen === "Lobby" && (
+        <LobbyScreen
+          playerName={playerName}
+          setPlayerName={setPlayerName}
+          roomId={roomId}
+          setRoomId={setRoomId}
+          joinRoom={joinRoom}
+        />
       )}
+      {screen === "Room" && (
+        <RoomScreen
+          playerName={playerName}
+          roomId={roomId}
+          players={players}
+          gameSummary={gameSummary}
+          startGame={startGame}
+        />
+      )}
+      {screen === "Game" && (
+        <GameScreen
+          playerName={playerName}
+          roomId={roomId}
+          players={players}
+          gameState={gameState}
+          gameTurn={gameTurn}
+          makeTurn={makeTurn}
+        />
+      )}
+      {error && <p>Error: {error}</p>}
     </div>
   );
-
-  function sendMessage(message: ClientMessage) {
-    wsRef.current?.send(JSON.stringify(message));
-  }
 };
 
 export default App;
