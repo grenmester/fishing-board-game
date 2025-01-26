@@ -3,20 +3,18 @@ export const enum RoomStatus {
   InProgress,
 }
 
+export const enum ClientMessageEnum {
+  JoinRoomRequest,
+  StartGameRequest,
+  MakeTurnRequest,
+}
+
 export const enum ServerMessageEnum {
-  JoinRoomFailure,
-  StartGameFailure,
-  MakeTurnFailure,
+  Fail,
   CreateRoom,
   UpdateRoom,
   DeleteRoom,
   CreateGame,
   UpdateGame,
   DeleteGame,
-}
-
-export const enum ClientMessageEnum {
-  JoinRoomRequest,
-  StartGameRequest,
-  MakeTurnRequest,
 }

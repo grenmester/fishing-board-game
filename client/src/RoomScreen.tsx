@@ -1,4 +1,4 @@
-import type { GameSummary, RoomState } from "shared/types";
+import type { GameSummary, Player } from "shared/types";
 
 const RoomScreen = ({
   playerName,
@@ -9,7 +9,7 @@ const RoomScreen = ({
 }: {
   playerName: string;
   roomId: string;
-  players: RoomState["players"];
+  players: Player[];
   gameSummary: GameSummary | undefined;
   startGame: () => void;
 }) => {

@@ -1,13 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ClientMessageEnum, ServerMessageEnum } from "../../shared/enums";
-import type {
-  ClientMessage,
-  GameState,
-  GameSummary,
-  GameTurn,
-  Players,
-  ServerMessage,
-} from "shared/types";
+import type { Game, GameSummary, Player, ServerMessage } from "shared/types";
 import LobbyScreen from "./LobbyScreen";
 import RoomScreen from "./RoomScreen";
 import GameScreen from "./GameScreen";
@@ -17,14 +10,14 @@ const App = () => {
   const [roomId, setRoomId] = useState<string>("");
 
   const [screen, setScreen] = useState<"Lobby" | "Room" | "Game">("Lobby");
-  const [players, setPlayers] = useState<Players>({});
-  const [gameState, setGameState] = useState<GameState>();
-  const [gameTurn, setGameTurn] = useState<GameTurn>();
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [game, setGame] = useState<Game>();
   const [gameSummary, setGameSummary] = useState<GameSummary>();
+  const [debugString, setDebugString] = useState<string>("");
 
   const [error, setError] = useState<string>();
 
-  const wsRef = React.useRef<WebSocket>();
+  const wsRef = useRef<WebSocket>();
 
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:3000");
@@ -34,34 +27,30 @@ const App = () => {
       setError(undefined);
       const data = JSON.parse(e.data) as ServerMessage;
       switch (data.type) {
-        case ServerMessageEnum.JoinRoomFailure:
-        case ServerMessageEnum.StartGameFailure:
-        case ServerMessageEnum.MakeTurnFailure:
+        case ServerMessageEnum.Fail:
           setError(data.error);
           break;
         case ServerMessageEnum.CreateRoom:
           setScreen("Room");
-          setPlayers(data.roomState.players);
+          setPlayers(data.room.players);
           break;
         case ServerMessageEnum.UpdateRoom:
-          setPlayers(data.roomState.players);
+          setPlayers(data.room.players);
           break;
         case ServerMessageEnum.DeleteRoom:
           setScreen("Lobby");
-          setPlayers({});
+          setPlayers([]);
           setError(data.error);
           break;
         case ServerMessageEnum.CreateGame:
           setScreen("Game");
-          setGameState(data.gameState);
+          setGame(data.game);
           break;
         case ServerMessageEnum.UpdateGame:
-          setGameState(data.gameState);
-          setGameTurn(data.gameTurn);
+          setGame(data.game);
           break;
         case ServerMessageEnum.DeleteGame:
           setScreen("Room");
-          setGameTurn(undefined);
           setGameSummary(data.gameSummary);
           break;
       }
@@ -73,29 +62,31 @@ const App = () => {
   }, []);
 
   const joinRoom = () => {
-    sendMessage({
-      type: ClientMessageEnum.JoinRoomRequest,
-      playerName: playerName,
-      roomId: roomId,
-    });
+    wsRef.current?.send(
+      JSON.stringify({
+        type: ClientMessageEnum.JoinRoomRequest,
+        playerName: playerName,
+        roomId: roomId,
+      }),
+    );
   };
 
   const startGame = () => {
-    sendMessage({
-      type: ClientMessageEnum.StartGameRequest,
-      roomId: roomId,
-    });
+    wsRef.current?.send(
+      JSON.stringify({
+        type: ClientMessageEnum.StartGameRequest,
+        roomId: roomId,
+      }),
+    );
   };
 
   const makeTurn = () => {
-    sendMessage({
-      type: ClientMessageEnum.MakeTurnRequest,
-      roomId: roomId,
-    });
-  };
-
-  const sendMessage = (message: ClientMessage) => {
-    wsRef.current?.send(JSON.stringify(message));
+    wsRef.current?.send(
+      JSON.stringify({
+        type: ClientMessageEnum.MakeTurnRequest,
+        roomId: roomId,
+      }),
+    );
   };
 
   return (
@@ -124,12 +115,16 @@ const App = () => {
           playerName={playerName}
           roomId={roomId}
           players={players}
-          gameState={gameState}
-          gameTurn={gameTurn}
+          game={game}
           makeTurn={makeTurn}
         />
       )}
       {error && <p>Error: {error}</p>}
+      <hr />
+      <p>Websockets Debug Console</p>
+      <textarea onChange={(e) => setDebugString(e.target.value)} placeholder="WebSocket message" />
+      <br />
+      <button onClick={() => wsRef.current?.send(debugString)}>Send WebSocket Message</button>
     </div>
   );
 };
