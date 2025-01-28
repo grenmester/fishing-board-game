@@ -1,51 +1,66 @@
 import { WebSocket, WebSocketServer } from "ws";
-import { randomInt, randomUUID } from "crypto";
-import { type ClientMessage, type GameSummary, type Room, type ServerMessage } from "shared/types";
-import { ClientMessageEnum, RoomStatus, ServerMessageEnum } from "../shared/enums";
+import { randomUUID } from "crypto";
+import { fishDataRecord, locationDataRecord } from "shared/data";
+import {
+  ActionType,
+  ClientMessageType,
+  Fish,
+  RoomStatus,
+  ServerMessageType,
+  type ClientMessage,
+  type GamePlayer,
+  type GameSummary,
+  type InProgressRoom,
+  type JoinRoomClientMessage,
+  type LocationData,
+  type MakeTurnClientMessage,
+  type Room,
+  type ServerMessage,
+} from "shared/types";
 
 interface Server extends WebSocketServer {
   clients: Set<Socket>;
 }
 
 interface Socket extends WebSocket {
-  id: string;
+  playerId: string;
   roomId: string;
 }
 
-const port = 3000;
-const minPlayers = 2;
-const maxPlayers = 8;
-const numActionsPerTurn = 2;
-const winningReputation = 10;
+const PORT = 3000;
+const MIN_PLAYERS = 2;
+const MAX_PLAYERS = 8;
+const ACTIONS_PER_TURN = 2;
+const WINNING_REPUTATION = 10;
 
-const wss = new WebSocketServer({ port }) as Server;
-const rooms: { [roomId: string]: Room } = {};
+const wss = new WebSocketServer({ port: PORT }) as Server;
+const rooms: Record<string, Room> = {};
 
 wss.on("connection", (ws: Socket) => {
-  ws.id = randomUUID();
-  console.info(`Client ${ws.id} connected`);
+  ws.playerId = randomUUID();
+  console.info(`Client ${ws.playerId} connected`);
 
   ws.on("message", (message) => {
     const data: ClientMessage = JSON.parse(message.toString());
     switch (data.type) {
-      case ClientMessageEnum.JoinRoomRequest:
-        handleJoinRoom(ws, data.roomId, data.playerName);
+      case ClientMessageType.JoinRoom:
+        handleJoinRoom(ws, data);
         break;
-      case ClientMessageEnum.StartGameRequest:
-        handleStartGame(ws, data.roomId);
+      case ClientMessageType.StartGame:
+        handleStartGame(ws);
         break;
-      case ClientMessageEnum.MakeTurnRequest:
-        handleMakeTurn(ws, data.roomId);
+      case ClientMessageType.MakeTurn:
+        handleMakeTurn(ws, data);
         break;
     }
   });
 
   ws.on("close", () => {
-    console.info(`Client ${ws.id} disconnected`);
+    console.info(`Client ${ws.playerId} disconnected`);
     handleClientDisconnect(ws);
   });
 });
-console.info(`The WebSocket server is running on port ${port}`);
+console.info(`The WebSocket server is running on port ${PORT}`);
 
 const validateJoinRoomInput = (room: Room, playerId: string): string => {
   const roomId = room.roomId;
@@ -54,8 +69,7 @@ const validateJoinRoomInput = (room: Room, playerId: string): string => {
     return "The room is currently not open.";
   }
 
-  const playerIds = room.players.map((player) => player.playerId);
-  if (playerIds.includes(playerId)) {
+  if (playerId in room.playerProfiles) {
     console.error(`Player ${playerId} attempted to join room ${roomId} but is already in the room`);
     return "You are already in the room.";
   }
@@ -63,37 +77,31 @@ const validateJoinRoomInput = (room: Room, playerId: string): string => {
   return "";
 };
 
-const handleJoinRoom = (ws: Socket, roomId: string, playerName: string): void => {
+const handleJoinRoom = (ws: Socket, data: JoinRoomClientMessage): void => {
+  const { roomId, playerName } = data;
+
   let room: Room;
   if (rooms[roomId]) {
     room = rooms[roomId];
   } else {
-    room = {
-      roomId: roomId,
-      status: RoomStatus.Open,
-      players: [],
-    };
+    room = { roomId, status: RoomStatus.Open, playerProfiles: {} };
     rooms[roomId] = room;
     console.info(`Created room ${roomId}`);
   }
-  const playerId = ws.id;
+  const playerId = ws.playerId;
 
   const error = validateJoinRoomInput(room, playerId);
   if (error) {
-    sendMessage(ws, { type: ServerMessageEnum.Fail, error });
+    sendMessage(ws, { type: ServerMessageType.Fail, error });
     return;
   }
 
   ws.roomId = roomId;
-  room.players.push({
-    playerId: playerId,
-    playerName: playerName,
-    reputation: 0,
-  });
+  room.playerProfiles[playerId] = { playerId, playerName };
   console.info(`Player ${playerName} (${playerId}) joined room ${roomId}`);
 
-  sendMessage(ws, { type: ServerMessageEnum.CreateRoom, room });
-  broadcastMessageToRoom(room, { type: ServerMessageEnum.UpdateRoom, room });
+  sendMessage(ws, { type: ServerMessageType.CreateRoom, playerId, room });
+  broadcastMessageToRoom(room, { type: ServerMessageType.UpdateRoom, room });
 };
 
 const validateStartGameInput = (roomId: string, playerId: string): string => {
@@ -108,41 +116,51 @@ const validateStartGameInput = (roomId: string, playerId: string): string => {
     return "The game is already in progress.";
   }
 
-  const playerIds = room.players.map((player) => player.playerId);
-  if (!playerIds.includes(playerId)) {
+  if (!(playerId in room.playerProfiles)) {
     console.error(`Player ${playerId} attempted to start game in room ${roomId} but they are not in it`);
     return "You are not in the room.";
   }
 
-  const numPlayers = playerIds.length;
-  if (numPlayers < minPlayers || numPlayers > maxPlayers) {
+  const numPlayers = Object.keys(room.playerProfiles).length;
+  if (numPlayers < MIN_PLAYERS || numPlayers > MAX_PLAYERS) {
     console.error(`Player ${playerId} attempted to start game in room ${roomId} with ${numPlayers} player(s)`);
-    return `The game can't be started with ${numPlayers} players. There must be between ${minPlayers} and ${maxPlayers} players.`;
+    return `The game can't be started with ${numPlayers} players. There must be between ${MIN_PLAYERS} and ${MAX_PLAYERS} players.`;
   }
 
   return "";
 };
 
-const handleStartGame = (ws: Socket, roomId: string): void => {
-  const playerId = ws.id;
+const handleStartGame = (ws: Socket): void => {
+  const playerId = ws.playerId;
+  const roomId = ws.roomId;
   const error = validateStartGameInput(roomId, playerId);
   if (error) {
-    sendMessage(ws, { type: ServerMessageEnum.Fail, error });
+    sendMessage(ws, { type: ServerMessageType.Fail, error });
     return;
   }
 
-  const room = rooms[roomId]!;
-  room.status = RoomStatus.InProgress;
-  const game = {
-    turnCount: 0,
-    actionsLeft: numActionsPerTurn,
+  const playerProfiles = rooms[roomId]!.playerProfiles;
+  const playerIds = Object.keys(playerProfiles);
+  let players: Record<string, GamePlayer> = {};
+  for (const playerId of playerIds) {
+    players[playerId] = { playerId, fishList: [], reputation: 0 };
+  }
+  rooms[roomId] = {
+    roomId,
+    status: RoomStatus.InProgress,
+    playerProfiles,
+    playerOrder: playerIds,
+    game: {
+      players: players,
+      turnIdx: 0,
+      actionsLeft: ACTIONS_PER_TURN,
+    },
   };
-  room.game = game;
-  const playerIdx = room.players.findIndex((player) => player.playerId === playerId);
-  const playerName = room.players[playerIdx]?.playerName;
+  const playerName = playerProfiles[playerId]!.playerName;
   console.info(`Player ${playerName} (${playerId}) started game in room ${roomId}`);
 
-  broadcastMessageToRoom(room, { type: ServerMessageEnum.CreateGame, game });
+  const room = rooms[roomId];
+  broadcastMessageToRoom(room, { type: ServerMessageType.CreateGame, game: room.game });
 };
 
 const validateMakeTurnInput = (roomId: string, playerId: string): string => {
@@ -152,19 +170,17 @@ const validateMakeTurnInput = (roomId: string, playerId: string): string => {
     return "The room does not exist.";
   }
 
-  const { status, players, game } = room;
-  if (status !== RoomStatus.InProgress) {
+  if (room.status !== RoomStatus.InProgress) {
     console.error(`Player ${playerId} attempted to make a turn in room ${roomId} but the game is not in progress`);
     return "The game is already in progress.";
   }
 
-  const playerIds = players.map((player) => player.playerId);
-  if (!playerIds.includes(playerId)) {
+  if (!(playerId in room.playerProfiles)) {
     console.error(`Player ${playerId} attempted to make a turn in room ${roomId} but they are not in it`);
     return "You are not in the room.";
   }
 
-  const currentPlayerId = players[game!.turnCount % players.length]?.playerId;
+  const currentPlayerId = room.playerOrder[room.game.turnIdx % room.playerOrder.length];
   if (playerId !== currentPlayerId) {
     console.error(`Player ${playerId} attempted to make a turn in room ${roomId} but it is not their turn`);
     return "It's not your turn.";
@@ -173,45 +189,80 @@ const validateMakeTurnInput = (roomId: string, playerId: string): string => {
   return "";
 };
 
-const checkGameOver = (room: Room): GameSummary | undefined => {
-  const winners = room.players.filter((player) => player.reputation >= winningReputation);
-  if (winners.length === 0) {
-    return undefined;
+const getRandomFish = (locationData: LocationData): Fish => {
+  const totalWeight = Object.values(locationData).reduce((sum, weight) => sum + weight, 0);
+
+  const probability = Math.random() * totalWeight;
+  let cumulativeProbability = 0;
+
+  for (const [fish, weight] of Object.entries(locationData)) {
+    cumulativeProbability += weight;
+    if (probability < cumulativeProbability) {
+      return fish as Fish;
+    }
   }
-  return { winner: winners[0]!.playerName, players: JSON.parse(JSON.stringify(room.players)) };
+
+  return Fish.Trash;
 };
 
-const handleMakeTurn = (ws: Socket, roomId: string) => {
-  const playerId = ws.id;
+const checkGameOver = (room: InProgressRoom): GameSummary | undefined => {
+  for (const [playerId, player] of Object.entries(room.game.players)) {
+    if (player.reputation >= WINNING_REPUTATION) {
+      return { winner: room.playerProfiles[playerId]!.playerName, players: room.game.players };
+    }
+  }
+  return undefined;
+};
+
+const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
+  const action = data.action;
+  const playerId = ws.playerId;
+  const roomId = ws.roomId;
   const error = validateMakeTurnInput(roomId, playerId);
   if (error) {
-    sendMessage(ws, { type: ServerMessageEnum.Fail, error });
+    sendMessage(ws, { type: ServerMessageType.Fail, error });
     return;
   }
 
-  const room = rooms[roomId]!;
-  const playerIdx = room.players.findIndex((player) => player.playerId === playerId);
-  const playerName = room.players[playerIdx]?.playerName;
-  room.game!.turnCount++;
-  room.players[playerIdx]!.reputation += randomInt(1, 4);
-  console.info(`Player ${playerName} (${playerId}) made a turn`);
+  const room = rooms[roomId] as InProgressRoom;
+  const { playerProfiles, game } = room;
+  const playerName = playerProfiles[playerId]?.playerName;
 
-  broadcastMessageToRoom(room, { type: ServerMessageEnum.UpdateRoom, room });
+  switch (action.actionType) {
+    case ActionType.CatchFish:
+      if (game.actionsLeft <= 0) {
+        const error = "You have no actions left.";
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(`Player ${playerName} (${playerId}) attempted to catch fish but has no actions remaining`);
+        return;
+      }
+      game.actionsLeft--;
+
+      const player = game.players[playerId]!;
+      const fish = getRandomFish(locationDataRecord[action.location]);
+      player.fishList.push(fish);
+      player.reputation += fishDataRecord[fish].reputation;
+      console.info(`Player ${playerName} (${playerId}) caught a ${fish}`);
+      break;
+    case ActionType.EndTurn:
+      game.actionsLeft = ACTIONS_PER_TURN;
+      game.turnIdx++;
+      console.info(`Player ${playerName} (${playerId}) ended their turn`);
+      break;
+  }
+
+  broadcastMessageToRoom(room, { type: ServerMessageType.UpdateGame, game });
 
   const gameSummary = checkGameOver(room);
   if (gameSummary) {
-    room.status = RoomStatus.Open;
-    room.players.map((player) => {
-      player.reputation = 0;
-    });
-    delete room.game;
-    console.info(`Player ${playerName} (${playerId}) won the game in room ${roomId}, reset room`);
+    rooms[roomId] = { roomId, status: RoomStatus.Open, playerProfiles };
+    console.info(`Player ${playerName} (${playerId}) won the game in room ${roomId}, room was reset`);
 
-    broadcastMessageToRoom(room, { type: ServerMessageEnum.DeleteGame, gameSummary });
+    broadcastMessageToRoom(room, { type: ServerMessageType.DeleteGame, gameSummary });
   }
 };
 
-const handleClientDisconnect = (ws: Socket) => {
+const handleClientDisconnect = (ws: Socket): void => {
   const roomId = ws.roomId;
   if (!roomId) {
     return;
@@ -222,20 +273,19 @@ const handleClientDisconnect = (ws: Socket) => {
     return;
   }
 
-  const playerId = ws.id;
-  const playerIdx = room.players.findIndex((player) => player.playerId === playerId);
-  const playerName = room.players[playerIdx]?.playerName;
+  const playerId = ws.playerId;
+  const playerName = room.playerProfiles[playerId]!.playerName;
   switch (room.status) {
     case RoomStatus.Open:
-      room.players.splice(playerIdx, 1);
+      delete room.playerProfiles[playerId];
       console.info(`Player ${playerName} (${playerId}) disconnected from room ${roomId}`);
-      broadcastMessageToRoom(room, { type: ServerMessageEnum.UpdateRoom, room });
+      broadcastMessageToRoom(room, { type: ServerMessageType.UpdateRoom, room });
 
-      if (room.players.length === 0) {
+      if (!room.playerProfiles) {
         delete rooms[roomId];
-        console.info(`No more players in room ${roomId}, deleted room`);
+        console.info(`No more players in room ${roomId}, room was deleted`);
         broadcastMessageToRoom(room, {
-          type: ServerMessageEnum.DeleteRoom,
+          type: ServerMessageType.DeleteRoom,
           error: "No more players in the room.",
         });
       }
@@ -243,24 +293,23 @@ const handleClientDisconnect = (ws: Socket) => {
     case RoomStatus.InProgress:
       delete rooms[roomId];
       console.error(
-        `Player ${playerName} (${playerId}) disconnected from room ${roomId} while game was in progress, deleted room`,
+        `Player ${playerName} (${playerId}) disconnected from room ${roomId} while game was in progress, room was deleted`,
       );
       broadcastMessageToRoom(room, {
-        type: ServerMessageEnum.DeleteRoom,
+        type: ServerMessageType.DeleteRoom,
         error: "Another player left while the game was in progress.",
       });
       break;
   }
 };
 
-const sendMessage = (socket: Socket, message: ServerMessage) => {
+const sendMessage = (socket: Socket, message: ServerMessage): void => {
   socket.send(JSON.stringify(message));
 };
 
-const broadcastMessageToRoom = (room: Room, message: ServerMessage) => {
-  const playerIds = room.players.map((player) => player.playerId);
+const broadcastMessageToRoom = (room: Room, message: ServerMessage): void => {
   wss.clients.forEach((client) => {
-    if (playerIds.includes(client.id) && client.readyState === WebSocket.OPEN) {
+    if (client.playerId in room.playerProfiles && client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(message));
     }
   });

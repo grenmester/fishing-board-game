@@ -1,15 +1,15 @@
-import type { GameSummary, Player } from "shared/types";
+import type { GameSummary, PlayerProfile } from "shared/types";
 
 const RoomScreen = ({
   playerName,
   roomId,
-  players,
+  playerProfiles,
   gameSummary,
   startGame,
 }: {
   playerName: string;
   roomId: string;
-  players: Player[];
+  playerProfiles: Record<string, PlayerProfile>;
   gameSummary: GameSummary | undefined;
   startGame: () => void;
 }) => {
@@ -18,7 +18,7 @@ const RoomScreen = ({
       <h2>Waiting Room</h2>
       <p>Player Name: {playerName}</p>
       <p>Room ID: {roomId}</p>
-      <p>Player List: {JSON.stringify(players, null, 2)}</p>
+      <p>Player List: {JSON.stringify(playerProfiles, null, 2)}</p>
       {gameSummary && (
         <>
           <p>Game Summary: </p>

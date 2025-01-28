@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { ClientMessageEnum, ServerMessageEnum } from "../../shared/enums";
-import type { Game, GameSummary, Player, ServerMessage } from "shared/types";
+import { ClientMessageType, ServerMessageType } from "../../shared/types";
+import type { Action, Game, GameSummary, PlayerProfile, ServerMessage } from "shared/types";
 import LobbyScreen from "./LobbyScreen";
 import RoomScreen from "./RoomScreen";
 import GameScreen from "./GameScreen";
 
 const App = () => {
   const [playerName, setPlayerName] = useState<string>("");
+  const [playerId, setPlayerId] = useState<string>("");
   const [roomId, setRoomId] = useState<string>("");
 
   const [screen, setScreen] = useState<"Lobby" | "Room" | "Game">("Lobby");
-  const [players, setPlayers] = useState<Player[]>([]);
+  const [playerProfiles, setPlayerProfiles] = useState<Record<string, PlayerProfile>>({});
   const [game, setGame] = useState<Game>();
   const [gameSummary, setGameSummary] = useState<GameSummary>();
   const [debugString, setDebugString] = useState<string>("");
@@ -27,29 +28,30 @@ const App = () => {
       setError(undefined);
       const data = JSON.parse(e.data) as ServerMessage;
       switch (data.type) {
-        case ServerMessageEnum.Fail:
+        case ServerMessageType.Fail:
           setError(data.error);
           break;
-        case ServerMessageEnum.CreateRoom:
+        case ServerMessageType.CreateRoom:
           setScreen("Room");
-          setPlayers(data.room.players);
+          setPlayerId(data.playerId);
+          setPlayerProfiles(data.room.playerProfiles);
           break;
-        case ServerMessageEnum.UpdateRoom:
-          setPlayers(data.room.players);
+        case ServerMessageType.UpdateRoom:
+          setPlayerProfiles(data.room.playerProfiles);
           break;
-        case ServerMessageEnum.DeleteRoom:
+        case ServerMessageType.DeleteRoom:
           setScreen("Lobby");
-          setPlayers([]);
+          setPlayerProfiles({});
           setError(data.error);
           break;
-        case ServerMessageEnum.CreateGame:
+        case ServerMessageType.CreateGame:
           setScreen("Game");
           setGame(data.game);
           break;
-        case ServerMessageEnum.UpdateGame:
+        case ServerMessageType.UpdateGame:
           setGame(data.game);
           break;
-        case ServerMessageEnum.DeleteGame:
+        case ServerMessageType.DeleteGame:
           setScreen("Room");
           setGameSummary(data.gameSummary);
           break;
@@ -64,9 +66,9 @@ const App = () => {
   const joinRoom = () => {
     wsRef.current?.send(
       JSON.stringify({
-        type: ClientMessageEnum.JoinRoomRequest,
-        playerName: playerName,
-        roomId: roomId,
+        type: ClientMessageType.JoinRoom,
+        playerName,
+        roomId,
       }),
     );
   };
@@ -74,17 +76,16 @@ const App = () => {
   const startGame = () => {
     wsRef.current?.send(
       JSON.stringify({
-        type: ClientMessageEnum.StartGameRequest,
-        roomId: roomId,
+        type: ClientMessageType.StartGame,
       }),
     );
   };
 
-  const makeTurn = () => {
+  const makeTurn = (action: Action) => {
     wsRef.current?.send(
       JSON.stringify({
-        type: ClientMessageEnum.MakeTurnRequest,
-        roomId: roomId,
+        type: ClientMessageType.MakeTurn,
+        action,
       }),
     );
   };
@@ -105,16 +106,17 @@ const App = () => {
         <RoomScreen
           playerName={playerName}
           roomId={roomId}
-          players={players}
+          playerProfiles={playerProfiles}
           gameSummary={gameSummary}
           startGame={startGame}
         />
       )}
-      {screen === "Game" && (
+      {screen === "Game" && game && (
         <GameScreen
           playerName={playerName}
           roomId={roomId}
-          players={players}
+          playerProfiles={playerProfiles}
+          playerId={playerId}
           game={game}
           makeTurn={makeTurn}
         />
