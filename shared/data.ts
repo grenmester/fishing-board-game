@@ -1,4 +1,4 @@
-import { Fish, type FishData, Location, type LocationData } from "./types";
+import { Fish, type FishData, Gear, type GearData, Location, type LocationData } from "./types";
 
 export const fishDataRecord: Record<Fish, FishData> = {
   [Fish.Trout]: {
@@ -41,5 +41,20 @@ export const locationDataRecord: Record<Location, LocationData> = {
     [Fish.Trout]: 1,
     [Fish.Bass]: 1,
     [Fish.Catfish]: 2,
+  },
+};
+
+export const gearDataRecord: Record<Gear, GearData> = {
+  [Gear.OldRod]: {
+    cost: 1,
+    reputation: 1,
+  },
+  [Gear.GoodRod]: {
+    cost: 2,
+    reputation: 2,
+  },
+  [Gear.SuperRod]: {
+    cost: 3,
+    reputation: 3,
   },
 };

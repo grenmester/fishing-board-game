@@ -1,10 +1,11 @@
 import { WebSocket, WebSocketServer } from "ws";
 import { randomUUID } from "crypto";
-import { fishDataRecord, locationDataRecord } from "shared/data";
+import { fishDataRecord, gearDataRecord, locationDataRecord } from "shared/data";
 import {
   ActionType,
   ClientMessageType,
   Fish,
+  Gear,
   RoomStatus,
   ServerMessageType,
   type ClientMessage,
@@ -143,8 +144,15 @@ const handleStartGame = (ws: Socket): void => {
   const playerIds = Object.keys(playerProfiles);
   let players: Record<string, GamePlayer> = {};
   for (const playerId of playerIds) {
-    players[playerId] = { playerId, fishList: [], reputation: 0 };
+    players[playerId] = {
+      playerId,
+      fishList: [],
+      gearList: [],
+      money: 0,
+      reputation: 0,
+    };
   }
+  const gearList = Array.from(Array(3), (_) => getRandomGear());
   rooms[roomId] = {
     roomId,
     status: RoomStatus.InProgress,
@@ -154,6 +162,7 @@ const handleStartGame = (ws: Socket): void => {
       players: players,
       turnIdx: 0,
       actionsLeft: ACTIONS_PER_TURN,
+      gearList,
     },
   };
   const playerName = playerProfiles[playerId]!.playerName;
@@ -205,6 +214,11 @@ const getRandomFish = (locationData: LocationData): Fish => {
   return Fish.Trash;
 };
 
+const getRandomGear = (): Gear => {
+  const gear = Object.keys(gearDataRecord);
+  return gear[Math.floor(Math.random() * gear.length)] as Gear;
+};
+
 const checkGameOver = (room: InProgressRoom): GameSummary | undefined => {
   for (const [playerId, player] of Object.entries(room.game.players)) {
     if (player.reputation >= WINNING_REPUTATION) {
@@ -227,9 +241,31 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
   const room = rooms[roomId] as InProgressRoom;
   const { playerProfiles, game } = room;
   const playerName = playerProfiles[playerId]?.playerName;
+  const player = game.players[playerId]!;
 
   switch (action.actionType) {
-    case ActionType.CatchFish:
+    case ActionType.BuyGear: {
+      const gear = game.gearList[action.gearIdx];
+      if (!gear) {
+        const error = "Invalid gear selected.";
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(`Player ${playerName} (${playerId}) attempted to buy an invalid gear`);
+        return;
+      }
+      const cost = gearDataRecord[gear].cost;
+      if (player.money < cost) {
+        const error = "You don't have enough money to buy that gear.";
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(`Player ${playerName} (${playerId}) attempted to buy a ${gear} but has insufficient money`);
+        return;
+      }
+      game.gearList[action.gearIdx] = getRandomGear();
+      player.gearList.push(gear);
+      player.money -= cost;
+      console.info(`Player ${playerName} (${playerId}) bought a ${gear}`);
+      break;
+    }
+    case ActionType.CatchFish: {
       if (game.actionsLeft <= 0) {
         const error = "You have no actions left.";
         sendMessage(ws, { type: ServerMessageType.Fail, error });
@@ -238,12 +274,50 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
       }
       game.actionsLeft--;
 
-      const player = game.players[playerId]!;
       const fish = getRandomFish(locationDataRecord[action.location]);
       player.fishList.push(fish);
-      player.reputation += fishDataRecord[fish].reputation;
       console.info(`Player ${playerName} (${playerId}) caught a ${fish}`);
       break;
+    }
+    case ActionType.DonateFish: {
+      const fish = player.fishList[action.fishIdx];
+      if (!fish) {
+        const error = "Invalid fish selected.";
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(`Player ${playerName} (${playerId}) attempted to donate an invalid fish`);
+        return;
+      }
+      player.fishList.splice(action.fishIdx, 1);
+      player.reputation += fishDataRecord[fish].reputation;
+      console.info(`Player ${playerName} (${playerId}) donated a ${fish}`);
+      break;
+    }
+    case ActionType.DonateGear: {
+      const gear = player.gearList[action.gearIdx];
+      if (!gear) {
+        const error = "Invalid gear selected.";
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(`Player ${playerName} (${playerId}) attempted to donate an invalid gear`);
+        return;
+      }
+      player.gearList.splice(action.gearIdx, 1);
+      player.reputation += gearDataRecord[gear].reputation;
+      console.info(`Player ${playerName} (${playerId}) donated a ${gear}`);
+      break;
+    }
+    case ActionType.SellFish: {
+      const fish = player.fishList[action.fishIdx];
+      if (!fish) {
+        const error = "Invalid fish selected.";
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(`Player ${playerName} (${playerId}) attempted to sell an invalid fish`);
+        return;
+      }
+      player.fishList.splice(action.fishIdx, 1);
+      player.money += fishDataRecord[fish].money;
+      console.info(`Player ${playerName} (${playerId}) sold a ${fish}`);
+      break;
+    }
     case ActionType.EndTurn:
       game.actionsLeft = ACTIONS_PER_TURN;
       game.turnIdx++;
@@ -293,7 +367,7 @@ const handleClientDisconnect = (ws: Socket): void => {
     case RoomStatus.InProgress:
       delete rooms[roomId];
       console.error(
-        `Player ${playerName} (${playerId}) disconnected from room ${roomId} while game was in progress, room was deleted`,
+        `Player ${playerName} (${playerId}) disconnected from room ${roomId} while game was in progress, room was deleted`
       );
       broadcastMessageToRoom(room, {
         type: ServerMessageType.DeleteRoom,

@@ -77,17 +77,37 @@ export const enum ServerMessageType {
 }
 
 export const enum ActionType {
+  BuyGear = "buyGear",
   CatchFish = "catchFish",
+  DonateFish = "donateFish",
+  DonateGear = "donateGear",
   EndTurn = "endTurn",
+  SellFish = "sellFish",
 }
 
 export type Action =
+  | {
+      actionType: ActionType.BuyGear;
+      gearIdx: number;
+    }
   | {
       actionType: ActionType.CatchFish;
       location: Location;
     }
   | {
+      actionType: ActionType.DonateFish;
+      fishIdx: number;
+    }
+  | {
+      actionType: ActionType.DonateGear;
+      gearIdx: number;
+    }
+  | {
       actionType: ActionType.EndTurn;
+    }
+  | {
+      actionType: ActionType.SellFish;
+      fishIdx: number;
     };
 
 export type Room = OpenRoom | InProgressRoom;
@@ -120,11 +140,14 @@ export type Game = {
   players: Record<string, GamePlayer>;
   turnIdx: number;
   actionsLeft: number;
+  gearList: Gear[];
 };
 
 export type GamePlayer = {
   readonly playerId: string;
   fishList: Fish[];
+  gearList: Gear[];
+  money: number;
   reputation: number;
 };
 
@@ -154,3 +177,14 @@ export const enum Location {
 }
 
 export type LocationData = Partial<Record<Fish, number>>;
+
+export const enum Gear {
+  OldRod = "oldRod",
+  GoodRod = "goodRod",
+  SuperRod = "superRod",
+}
+
+export type GearData = {
+  cost: number;
+  reputation: number;
+};

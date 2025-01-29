@@ -69,7 +69,7 @@ const App = () => {
         type: ClientMessageType.JoinRoom,
         playerName,
         roomId,
-      }),
+      })
     );
   };
 
@@ -77,7 +77,7 @@ const App = () => {
     wsRef.current?.send(
       JSON.stringify({
         type: ClientMessageType.StartGame,
-      }),
+      })
     );
   };
 
@@ -86,7 +86,7 @@ const App = () => {
       JSON.stringify({
         type: ClientMessageType.MakeTurn,
         action,
-      }),
+      })
     );
   };
 
@@ -124,7 +124,12 @@ const App = () => {
       {error && <p>Error: {error}</p>}
       <hr />
       <p>Websockets Debug Console</p>
-      <textarea onChange={(e) => setDebugString(e.target.value)} placeholder="WebSocket message" />
+      <textarea
+        onChange={(e) => {
+          setDebugString(e.target.value);
+        }}
+        placeholder="WebSocket message"
+      />
       <br />
       <button onClick={() => wsRef.current?.send(debugString)}>Send WebSocket Message</button>
     </div>
