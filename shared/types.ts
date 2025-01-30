@@ -82,7 +82,9 @@ export const enum ActionType {
   DonateFish = "donateFish",
   DonateGear = "donateGear",
   EndTurn = "endTurn",
+  RefreshMarket = "refreshMarket",
   SellFish = "sellFish",
+  SetLocation = "setLocation",
 }
 
 export type Action =
@@ -92,7 +94,6 @@ export type Action =
     }
   | {
       actionType: ActionType.CatchFish;
-      location: Location;
     }
   | {
       actionType: ActionType.DonateFish;
@@ -108,6 +109,10 @@ export type Action =
   | {
       actionType: ActionType.SellFish;
       fishIdx: number;
+    }
+  | {
+      actionType: ActionType.SetLocation;
+      location: Location;
     };
 
 export type Room = OpenRoom | InProgressRoom;
@@ -122,7 +127,6 @@ export type InProgressRoom = {
   readonly roomId: string;
   status: RoomStatus.InProgress;
   readonly playerProfiles: Record<string, PlayerProfile>;
-  readonly playerOrder: string[];
   game: Game;
 };
 
@@ -138,10 +142,18 @@ export type PlayerProfile = {
 
 export type Game = {
   players: Record<string, GamePlayer>;
+  readonly playerOrder: string[];
   turnIdx: number;
-  actionsLeft: number;
+  location?: Location;
+  fishingAttempts: number;
+  turnConfig: TurnConfig;
   gearList: Gear[];
 };
+
+export type TurnConfig = {
+  allowedLocations: Location[]
+  allowedFishingAttempts: number;
+}
 
 export type GamePlayer = {
   readonly playerId: string;
@@ -163,17 +175,21 @@ export const enum Fish {
   Perch = "perch",
   Sardine = "sardine",
   Mackerel = "mackerel",
+  Rockfish = "rockfish",
+  Lingcod = "lingcod",
+  Halibut = "halibut",
   Trash = "trash",
 }
 
 export type FishData = {
-  reputation: number;
-  money: number;
+  readonly reputation: number;
+  readonly money: number;
 };
 
 export const enum Location {
   Lake = "lake",
   Pier = "pier",
+  DeepSea = "deepSea",
 }
 
 export type LocationData = Partial<Record<Fish, number>>;
@@ -182,9 +198,13 @@ export const enum Gear {
   OldRod = "oldRod",
   GoodRod = "goodRod",
   SuperRod = "superRod",
+  FishingBoat = "fishingBoat",
 }
 
 export type GearData = {
-  cost: number;
-  reputation: number;
+  readonly cost: number;
+  readonly reputation: number;
+  readonly effect: Effect;
 };
+
+export type Effect = (turnConfig: TurnConfig) => TurnConfig;

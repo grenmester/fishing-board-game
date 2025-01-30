@@ -6,9 +6,11 @@ import {
   ClientMessageType,
   Fish,
   Gear,
+  Location,
   RoomStatus,
   ServerMessageType,
   type ClientMessage,
+  type Game,
   type GamePlayer,
   type GameSummary,
   type InProgressRoom,
@@ -17,6 +19,7 @@ import {
   type MakeTurnClientMessage,
   type Room,
   type ServerMessage,
+  type TurnConfig,
 } from "shared/types";
 
 interface Server extends WebSocketServer {
@@ -31,8 +34,11 @@ interface Socket extends WebSocket {
 const PORT = 3000;
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 8;
-const ACTIONS_PER_TURN = 2;
 const WINNING_REPUTATION = 10;
+const DEFAULT_TURN_CONFIG: TurnConfig = {
+  allowedLocations: [Location.Pier, Location.Lake],
+  allowedFishingAttempts: 2,
+};
 
 const wss = new WebSocketServer({ port: PORT }) as Server;
 const rooms: Record<string, Room> = {};
@@ -157,11 +163,12 @@ const handleStartGame = (ws: Socket): void => {
     roomId,
     status: RoomStatus.InProgress,
     playerProfiles,
-    playerOrder: playerIds,
     game: {
-      players: players,
+      players,
+      playerOrder: playerIds,
       turnIdx: 0,
-      actionsLeft: ACTIONS_PER_TURN,
+      fishingAttempts: 0,
+      turnConfig: DEFAULT_TURN_CONFIG,
       gearList,
     },
   };
@@ -189,7 +196,7 @@ const validateMakeTurnInput = (roomId: string, playerId: string): string => {
     return "You are not in the room.";
   }
 
-  const currentPlayerId = room.playerOrder[room.game.turnIdx % room.playerOrder.length];
+  const currentPlayerId = getCurrentPlayer(room.game).playerId;
   if (playerId !== currentPlayerId) {
     console.error(`Player ${playerId} attempted to make a turn in room ${roomId} but it is not their turn`);
     return "It's not your turn.";
@@ -228,8 +235,21 @@ const checkGameOver = (room: InProgressRoom): GameSummary | undefined => {
   return undefined;
 };
 
+const getCurrentPlayer = (game: Game): GamePlayer => {
+  const currentPlayerId = game.playerOrder[game.turnIdx % game.playerOrder.length] as string;
+  return game.players[currentPlayerId]!;
+};
+
+const genTurnConfig = (game: Game): TurnConfig => {
+  const player = getCurrentPlayer(game);
+  let turnConfig = DEFAULT_TURN_CONFIG;
+  player.gearList.forEach((gear) => {
+    turnConfig = gearDataRecord[gear].effect(turnConfig);
+  });
+  return turnConfig;
+};
+
 const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
-  const action = data.action;
   const playerId = ws.playerId;
   const roomId = ws.roomId;
   const error = validateMakeTurnInput(roomId, playerId);
@@ -238,6 +258,7 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
     return;
   }
 
+  const action = data.action;
   const room = rooms[roomId] as InProgressRoom;
   const { playerProfiles, game } = room;
   const playerName = playerProfiles[playerId]?.playerName;
@@ -252,6 +273,7 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
         console.error(`Player ${playerName} (${playerId}) attempted to buy an invalid gear`);
         return;
       }
+
       const cost = gearDataRecord[gear].cost;
       if (player.money < cost) {
         const error = "You don't have enough money to buy that gear.";
@@ -259,6 +281,8 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
         console.error(`Player ${playerName} (${playerId}) attempted to buy a ${gear} but has insufficient money`);
         return;
       }
+
+      game.turnConfig = gearDataRecord[gear].effect(game.turnConfig);
       game.gearList[action.gearIdx] = getRandomGear();
       player.gearList.push(gear);
       player.money -= cost;
@@ -266,15 +290,21 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
       break;
     }
     case ActionType.CatchFish: {
-      if (game.actionsLeft <= 0) {
+      if (!game.location) {
+        const error = "You did not select a location.";
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(`Player ${playerName} (${playerId}) attempted to catch fish but didn't select a location`);
+        return;
+      }
+      if (game.fishingAttempts >= game.turnConfig.allowedFishingAttempts) {
         const error = "You have no actions left.";
         sendMessage(ws, { type: ServerMessageType.Fail, error });
         console.error(`Player ${playerName} (${playerId}) attempted to catch fish but has no actions remaining`);
         return;
       }
-      game.actionsLeft--;
+      game.fishingAttempts++;
 
-      const fish = getRandomFish(locationDataRecord[action.location]);
+      const fish = getRandomFish(locationDataRecord[game.location]);
       player.fishList.push(fish);
       console.info(`Player ${playerName} (${playerId}) caught a ${fish}`);
       break;
@@ -318,11 +348,31 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
       console.info(`Player ${playerName} (${playerId}) sold a ${fish}`);
       break;
     }
-    case ActionType.EndTurn:
-      game.actionsLeft = ACTIONS_PER_TURN;
+    case ActionType.SetLocation: {
+      if (game.location) {
+        const error = "Location already selected.";
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(`Player ${playerName} (${playerId}) attempted to set their location again`);
+        return;
+      }
+      if (!game.turnConfig.allowedLocations.includes(action.location)) {
+        const error = "Invalid location selected.";
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(`Player ${playerName} (${playerId}) attempted to set an invalid location`);
+        return;
+      }
+      game.location = action.location;
+      break;
+    }
+    case ActionType.EndTurn: {
       game.turnIdx++;
+      delete game.location;
+      game.fishingAttempts = 0;
+      game.turnConfig = genTurnConfig(game);
+
       console.info(`Player ${playerName} (${playerId}) ended their turn`);
       break;
+    }
   }
 
   broadcastMessageToRoom(room, { type: ServerMessageType.UpdateGame, game });
@@ -367,7 +417,7 @@ const handleClientDisconnect = (ws: Socket): void => {
     case RoomStatus.InProgress:
       delete rooms[roomId];
       console.error(
-        `Player ${playerName} (${playerId}) disconnected from room ${roomId} while game was in progress, room was deleted`
+        `Player ${playerName} (${playerId}) disconnected from room ${roomId} while game was in progress, room was deleted`,
       );
       broadcastMessageToRoom(room, {
         type: ServerMessageType.DeleteRoom,

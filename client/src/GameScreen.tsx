@@ -32,40 +32,40 @@ const GameScreen = ({
       <p>Player Name: {playerName}</p>
       <p>Player ID: {playerId}</p>
       <p>Room ID: {roomId}</p>
+      <p>Location: {location}</p>
+      <p>Fishing Attempts Made: {game.fishingAttempts}</p>
       <p>Player List: {JSON.stringify(playerProfiles, null, 2)}</p>
       <p>Game State: </p>
       <pre>{JSON.stringify(game, null, 2)}</pre>
       <p>
         Locations:
-        <label>
-          <input
-            type="radio"
-            value={Location.Lake}
-            checked={location === Location.Lake}
-            onChange={(e) => {
-              setLocation(e.target.value as Location);
-            }}
-          />
-          Lake
-        </label>
-        <label>
-          <input
-            type="radio"
-            value={Location.Pier}
-            checked={location === Location.Pier}
-            onChange={(e) => {
-              setLocation(e.target.value as Location);
-            }}
-          />
-          Pier
-        </label>
-        {game.actionsLeft > 0 && (
+        {game.turnConfig.allowedLocations.map((allowedLocation) => (
+          <label>
+            <input
+              type="radio"
+              value={allowedLocation}
+              checked={location === allowedLocation}
+              onChange={(e) => {
+                setLocation(e.target.value as Location);
+              }}
+            />
+            {allowedLocation}
+          </label>
+        ))}
+        <button
+          onClick={() => {
+            makeTurn({
+              actionType: ActionType.SetLocation,
+              location,
+            });
+          }}
+        >
+          Set Location
+        </button>
+        {game.fishingAttempts < game.turnConfig.allowedFishingAttempts && (
           <button
             onClick={() => {
-              makeTurn({
-                actionType: ActionType.CatchFish,
-                location,
-              });
+              makeTurn({ actionType: ActionType.CatchFish });
             }}
           >
             Catch Fish
