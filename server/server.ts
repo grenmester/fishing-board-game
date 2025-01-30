@@ -35,6 +35,8 @@ const PORT = 3000;
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 8;
 const WINNING_REPUTATION = 10;
+const MARKET_SIZE = 3;
+const MARKET_REFRESH_COST = 3;
 const DEFAULT_TURN_CONFIG: TurnConfig = {
   allowedLocations: [Location.Pier, Location.Lake],
   allowedFishingAttempts: 2,
@@ -137,6 +139,10 @@ const validateStartGameInput = (roomId: string, playerId: string): string => {
   return "";
 };
 
+const genMarket = (): Gear[] => {
+  return Array.from(Array(MARKET_SIZE), getRandomGear);
+};
+
 const handleStartGame = (ws: Socket): void => {
   const playerId = ws.playerId;
   const roomId = ws.roomId;
@@ -158,7 +164,6 @@ const handleStartGame = (ws: Socket): void => {
       reputation: 0,
     };
   }
-  const gearList = Array.from(Array(3), (_) => getRandomGear());
   rooms[roomId] = {
     roomId,
     status: RoomStatus.InProgress,
@@ -169,7 +174,7 @@ const handleStartGame = (ws: Socket): void => {
       turnIdx: 0,
       fishingAttempts: 0,
       turnConfig: DEFAULT_TURN_CONFIG,
-      gearList,
+      market: genMarket(),
     },
   };
   const playerName = playerProfiles[playerId]!.playerName;
@@ -266,7 +271,7 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
 
   switch (action.actionType) {
     case ActionType.BuyGear: {
-      const gear = game.gearList[action.gearIdx];
+      const gear = game.market[action.gearIdx];
       if (!gear) {
         const error = "Invalid gear selected.";
         sendMessage(ws, { type: ServerMessageType.Fail, error });
@@ -283,7 +288,7 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
       }
 
       game.turnConfig = gearDataRecord[gear].effect(game.turnConfig);
-      game.gearList[action.gearIdx] = getRandomGear();
+      game.market[action.gearIdx] = getRandomGear();
       player.gearList.push(gear);
       player.money -= cost;
       console.info(`Player ${playerName} (${playerId}) bought a ${gear}`);
@@ -333,6 +338,19 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
       player.gearList.splice(action.gearIdx, 1);
       player.reputation += gearDataRecord[gear].reputation;
       console.info(`Player ${playerName} (${playerId}) donated a ${gear}`);
+      break;
+    }
+    case ActionType.RefreshMarket: {
+      if (player.money < MARKET_REFRESH_COST) {
+        const error = "Insufficient money.";
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(`Player ${playerName} (${playerId}) attempted to refresh market with insufficient money`);
+        return;
+      }
+
+      player.money -= MARKET_REFRESH_COST;
+      game.market = genMarket();
+      console.info(`Player ${playerName} (${playerId}) refreshed the market`);
       break;
     }
     case ActionType.SellFish: {

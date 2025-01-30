@@ -107,6 +107,9 @@ export type Action =
       actionType: ActionType.EndTurn;
     }
   | {
+      actionType: ActionType.RefreshMarket;
+    }
+  | {
       actionType: ActionType.SellFish;
       fishIdx: number;
     }
@@ -147,13 +150,13 @@ export type Game = {
   location?: Location;
   fishingAttempts: number;
   turnConfig: TurnConfig;
-  gearList: Gear[];
+  market: Gear[];
 };
 
 export type TurnConfig = {
-  allowedLocations: Location[]
+  allowedLocations: Location[];
   allowedFishingAttempts: number;
-}
+};
 
 export type GamePlayer = {
   readonly playerId: string;

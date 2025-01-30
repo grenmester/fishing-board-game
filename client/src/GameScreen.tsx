@@ -112,7 +112,7 @@ const GameScreen = ({
       )}
       <p>
         Market:
-        {game.gearList.map((gear, idx) => (
+        {game.market.map((gear, idx) => (
           <label key={`${gear}${idx.toString()}`}>
             <input
               type="radio"
@@ -134,6 +134,13 @@ const GameScreen = ({
           }}
         >
           Buy Gear
+        </button>
+        <button
+          onClick={() => {
+            makeTurn({ actionType: ActionType.RefreshMarket });
+          }}
+        >
+          Refresh Market
         </button>
       </p>
       {player.gearList.length > 0 && (
