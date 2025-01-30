@@ -1,5 +1,15 @@
 import { useState } from "react";
-import { type Action, ActionType, type Game, type PlayerProfile, Location } from "../../shared/types";
+import {
+  ActionCard,
+  ActionType,
+  Location,
+  type Action,
+  type ActionCardInput,
+  type BorrowGearActionCardInput,
+  type BorrowMoneyActionCardInput,
+  type Game,
+  type PlayerProfile,
+} from "../../shared/types";
 
 const GameScreen = ({
   playerName,
@@ -20,6 +30,8 @@ const GameScreen = ({
   const [fishIdx, setFishIdx] = useState(0);
   const [marketIdx, setMarketIdx] = useState(0);
   const [gearIdx, setGearIdx] = useState(0);
+  const [actionCardIdx, setActionCardIdx] = useState<number>();
+  const [actionCardInput, setActionCardInput] = useState<Partial<ActionCardInput>>();
 
   const player = game.players[playerId];
   if (!player) {
@@ -40,7 +52,7 @@ const GameScreen = ({
       <p>
         Locations:
         {game.turnConfig.allowedLocations.map((allowedLocation) => (
-          <label>
+          <label key={allowedLocation}>
             <input
               type="radio"
               value={allowedLocation}
@@ -169,6 +181,100 @@ const GameScreen = ({
           >
             Donate Gear
           </button>
+        </p>
+      )}
+      {player.actionCards.length > 0 && (
+        <p>
+          Action Cards:
+          {player.actionCards.map((actionCard, idx) => (
+            <label key={`${actionCard}${idx.toString()}`}>
+              <input
+                type="radio"
+                value={idx}
+                checked={actionCardIdx === idx}
+                onChange={(e) => {
+                  setActionCardIdx(parseInt(e.target.value));
+                  setActionCardInput({ actionCard });
+                }}
+              />
+              {actionCard}
+            </label>
+          ))}
+          <br />
+          {actionCardIdx !== undefined && player.actionCards[actionCardIdx] === ActionCard.BorrowGear && (
+            <>
+              {Object.keys(game.players).map((playerId) => (
+                <label key={playerId}>
+                  <input
+                    type="radio"
+                    value={playerId}
+                    checked={(actionCardInput as BorrowGearActionCardInput)?.playerId === playerId}
+                    onChange={(e) => {
+                      setActionCardInput({
+                        actionCard: ActionCard.BorrowGear,
+                        playerId: e.target.value,
+                      });
+                    }}
+                  />
+                  {playerId}
+                </label>
+              ))}
+              <br />
+              {actionCardInput &&
+                "playerId" in actionCardInput &&
+                game.players[actionCardInput.playerId]!.gearList.map((gear, idx) => (
+                  <label key={idx}>
+                    <input
+                      type="radio"
+                      value={idx}
+                      checked={(actionCardInput as BorrowGearActionCardInput)?.gearIdx === idx}
+                      onChange={(e) => {
+                        setActionCardInput((actionCardInput) => ({
+                          ...(actionCardInput as BorrowGearActionCardInput),
+                          gearIdx: parseInt(e.target.value),
+                        }));
+                      }}
+                    />
+                    {gear}
+                  </label>
+                ))}
+            </>
+          )}
+          {actionCardIdx !== undefined &&
+            player.actionCards[actionCardIdx] === ActionCard.BorrowMoney &&
+            Object.keys(game.players).map((playerId) => (
+              <label key={playerId}>
+                <input
+                  type="radio"
+                  value={playerId}
+                  checked={(actionCardInput as BorrowMoneyActionCardInput)?.playerId === playerId}
+                  onChange={(e) => {
+                    setActionCardInput((actionCardInput) => ({
+                      ...(actionCardInput as BorrowMoneyActionCardInput),
+                      playerId: e.target.value,
+                    }));
+                  }}
+                />
+                {playerId}
+              </label>
+            ))}
+          {actionCardIdx !== undefined &&
+            player.actionCards[actionCardIdx] === ActionCard.BorrowMoneyFromAll &&
+            "nothing to show"}
+          <br />
+          {actionCardIdx !== undefined && (
+            <button
+              onClick={() => {
+                makeTurn({
+                  actionType: ActionType.PlayActionCard,
+                  actionCardIdx,
+                  actionCardInput: actionCardInput as ActionCardInput,
+                });
+              }}
+            >
+              Play Action Card
+            </button>
+          )}
         </p>
       )}
       <p>

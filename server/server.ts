@@ -1,7 +1,8 @@
 import { WebSocket, WebSocketServer } from "ws";
 import { randomUUID } from "crypto";
-import { fishDataRecord, gearDataRecord, locationDataRecord } from "shared/data";
+import { actionCardDataRecord, fishDataRecord, gearDataRecord, locationDataRecord } from "shared/data";
 import {
+  ActionCard,
   ActionType,
   ClientMessageType,
   Fish,
@@ -37,6 +38,7 @@ const MAX_PLAYERS = 8;
 const WINNING_REPUTATION = 10;
 const MARKET_SIZE = 3;
 const MARKET_REFRESH_COST = 3;
+const NUM_STARTING_ACTION_CARDS = 2;
 const DEFAULT_TURN_CONFIG: TurnConfig = {
   allowedLocations: [Location.Pier, Location.Lake],
   allowedFishingAttempts: 2,
@@ -51,6 +53,7 @@ wss.on("connection", (ws: Socket) => {
 
   ws.on("message", (message) => {
     const data: ClientMessage = JSON.parse(message.toString());
+    console.debug(`message: ${JSON.stringify(data, null, 2)}`);
     switch (data.type) {
       case ClientMessageType.JoinRoom:
         handleJoinRoom(ws, data);
@@ -139,6 +142,9 @@ const validateStartGameInput = (roomId: string, playerId: string): string => {
   return "";
 };
 
+const genActionCardDraw = (numCards: number): ActionCard[] => {
+  return Array.from(Array(numCards), getRandomActionCard);
+};
 const genMarket = (): Gear[] => {
   return Array.from(Array(MARKET_SIZE), getRandomGear);
 };
@@ -160,6 +166,7 @@ const handleStartGame = (ws: Socket): void => {
       playerId,
       fishList: [],
       gearList: [],
+      actionCards: genActionCardDraw(NUM_STARTING_ACTION_CARDS),
       money: 0,
       reputation: 0,
     };
@@ -172,6 +179,7 @@ const handleStartGame = (ws: Socket): void => {
       players,
       playerOrder: playerIds,
       turnIdx: 0,
+      currentPlayerId: playerId,
       fishingAttempts: 0,
       turnConfig: DEFAULT_TURN_CONFIG,
       market: genMarket(),
@@ -201,8 +209,7 @@ const validateMakeTurnInput = (roomId: string, playerId: string): string => {
     return "You are not in the room.";
   }
 
-  const currentPlayerId = getCurrentPlayer(room.game).playerId;
-  if (playerId !== currentPlayerId) {
+  if (playerId !== room.game.currentPlayerId) {
     console.error(`Player ${playerId} attempted to make a turn in room ${roomId} but it is not their turn`);
     return "It's not your turn.";
   }
@@ -226,6 +233,11 @@ const getRandomFish = (locationData: LocationData): Fish => {
   return Fish.Trash;
 };
 
+const getRandomActionCard = (): ActionCard => {
+  const actionCards = Object.keys(actionCardDataRecord);
+  return actionCards[Math.floor(Math.random() * actionCards.length)] as ActionCard;
+};
+
 const getRandomGear = (): Gear => {
   const gear = Object.keys(gearDataRecord);
   return gear[Math.floor(Math.random() * gear.length)] as Gear;
@@ -240,13 +252,8 @@ const checkGameOver = (room: InProgressRoom): GameSummary | undefined => {
   return undefined;
 };
 
-const getCurrentPlayer = (game: Game): GamePlayer => {
-  const currentPlayerId = game.playerOrder[game.turnIdx % game.playerOrder.length] as string;
-  return game.players[currentPlayerId]!;
-};
-
 const genTurnConfig = (game: Game): TurnConfig => {
-  const player = getCurrentPlayer(game);
+  const player = game.players[game.currentPlayerId]!;
   let turnConfig = DEFAULT_TURN_CONFIG;
   player.gearList.forEach((gear) => {
     turnConfig = gearDataRecord[gear].effect(turnConfig);
@@ -340,6 +347,27 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
       console.info(`Player ${playerName} (${playerId}) donated a ${gear}`);
       break;
     }
+    case ActionType.PlayActionCard: {
+      const actionCard = player.actionCards[action.actionCardIdx];
+      const input = action.actionCardInput;
+      if (!actionCard || actionCard !== input.actionCard) {
+        const error = "Invalid action card selected.";
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(`Player ${playerName} (${playerId}) attempted to use an invalid action card`);
+        return;
+      }
+      const { validator, effect } = actionCardDataRecord[actionCard];
+      const error = validator(game, input);
+      if (error) {
+        sendMessage(ws, { type: ServerMessageType.Fail, error });
+        console.error(
+          `Player ${playerName} (${playerId}) attempted to use an action card but did not meet the requirements`,
+        );
+        return;
+      }
+      room.game = effect(game, input);
+      break;
+    }
     case ActionType.RefreshMarket: {
       if (player.money < MARKET_REFRESH_COST) {
         const error = "Insufficient money.";
@@ -384,6 +412,7 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
     }
     case ActionType.EndTurn: {
       game.turnIdx++;
+      game.currentPlayerId = game.playerOrder[game.turnIdx % game.playerOrder.length] as string;
       delete game.location;
       game.fishingAttempts = 0;
       game.turnConfig = genTurnConfig(game);
@@ -393,7 +422,7 @@ const handleMakeTurn = (ws: Socket, data: MakeTurnClientMessage): void => {
     }
   }
 
-  broadcastMessageToRoom(room, { type: ServerMessageType.UpdateGame, game });
+  broadcastMessageToRoom(room, { type: ServerMessageType.UpdateGame, game: room.game });
 
   const gameSummary = checkGameOver(room);
   if (gameSummary) {

@@ -82,6 +82,7 @@ export const enum ActionType {
   DonateFish = "donateFish",
   DonateGear = "donateGear",
   EndTurn = "endTurn",
+  PlayActionCard = "playActionCard",
   RefreshMarket = "refreshMarket",
   SellFish = "sellFish",
   SetLocation = "setLocation",
@@ -107,6 +108,11 @@ export type Action =
       actionType: ActionType.EndTurn;
     }
   | {
+      actionType: ActionType.PlayActionCard;
+      actionCardIdx: number;
+      actionCardInput: ActionCardInput;
+    }
+  | {
       actionType: ActionType.RefreshMarket;
     }
   | {
@@ -117,6 +123,26 @@ export type Action =
       actionType: ActionType.SetLocation;
       location: Location;
     };
+
+export type ActionCardInput =
+  | BorrowGearActionCardInput
+  | BorrowMoneyActionCardInput
+  | BorrowMoneyFromAllActionCardInput;
+
+export type BorrowGearActionCardInput = {
+  actionCard: ActionCard.BorrowGear;
+  playerId: string;
+  gearIdx: number;
+};
+
+export type BorrowMoneyActionCardInput = {
+  actionCard: ActionCard.BorrowMoney;
+  playerId: string;
+};
+
+export type BorrowMoneyFromAllActionCardInput = {
+  actionCard: ActionCard.BorrowMoneyFromAll;
+};
 
 export type Room = OpenRoom | InProgressRoom;
 
@@ -147,6 +173,7 @@ export type Game = {
   players: Record<string, GamePlayer>;
   readonly playerOrder: string[];
   turnIdx: number;
+  currentPlayerId: string;
   location?: Location;
   fishingAttempts: number;
   turnConfig: TurnConfig;
@@ -162,6 +189,7 @@ export type GamePlayer = {
   readonly playerId: string;
   fishList: Fish[];
   gearList: Gear[];
+  actionCards: ActionCard[];
   money: number;
   reputation: number;
 };
@@ -207,7 +235,20 @@ export const enum Gear {
 export type GearData = {
   readonly cost: number;
   readonly reputation: number;
-  readonly effect: Effect;
+  readonly effect: GearEffect;
 };
 
-export type Effect = (turnConfig: TurnConfig) => TurnConfig;
+export type GearEffect = (turnConfig: TurnConfig) => TurnConfig;
+
+export const enum ActionCard {
+  BorrowGear = "borrowGear",
+  BorrowMoney = "borrowMoney",
+  BorrowMoneyFromAll = "borrowMoneyFromAll",
+}
+
+export type ActionCardData = {
+  validator: (game: Game, input: ActionCardInput) => string;
+  effect: ActionCardEffect;
+};
+
+export type ActionCardEffect = (game: Game, input: ActionCardInput) => Game;
