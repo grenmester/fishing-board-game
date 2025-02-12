@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import {
   ActionCard,
   ActionType,
@@ -9,23 +10,18 @@ import {
   type BorrowMoneyActionCardInput,
   type Game,
   type PlayerProfile,
-} from "../../shared/types";
+} from "../../../shared/types";
 
-const GameScreen = ({
-  playerName,
-  roomId,
-  playerProfiles,
-  playerId,
-  game,
-  makeTurn,
-}: {
+interface GameScreenProps {
   playerName: string;
   roomId: string;
   playerProfiles: Record<string, PlayerProfile>;
   playerId: string;
   game: Game;
   makeTurn: (action: Action) => void;
-}) => {
+}
+
+const GameScreen = ({ playerName, roomId, playerProfiles, playerId, game, makeTurn }: GameScreenProps) => {
   const [location, setLocation] = useState<Location>(Location.Lake);
   const [fishIdx, setFishIdx] = useState(0);
   const [marketIdx, setMarketIdx] = useState(0);
@@ -208,7 +204,7 @@ const GameScreen = ({
                   <input
                     type="radio"
                     value={playerId}
-                    checked={(actionCardInput as BorrowGearActionCardInput)?.playerId === playerId}
+                    checked={(actionCardInput as BorrowGearActionCardInput).playerId === playerId}
                     onChange={(e) => {
                       setActionCardInput({
                         actionCard: ActionCard.BorrowGear,
@@ -222,12 +218,12 @@ const GameScreen = ({
               <br />
               {actionCardInput &&
                 "playerId" in actionCardInput &&
-                game.players[actionCardInput.playerId]!.gearList.map((gear, idx) => (
+                game.players[actionCardInput.playerId]?.gearList.map((gear, idx) => (
                   <label key={idx}>
                     <input
                       type="radio"
                       value={idx}
-                      checked={(actionCardInput as BorrowGearActionCardInput)?.gearIdx === idx}
+                      checked={(actionCardInput as BorrowGearActionCardInput).gearIdx === idx}
                       onChange={(e) => {
                         setActionCardInput((actionCardInput) => ({
                           ...(actionCardInput as BorrowGearActionCardInput),
@@ -247,7 +243,7 @@ const GameScreen = ({
                 <input
                   type="radio"
                   value={playerId}
-                  checked={(actionCardInput as BorrowMoneyActionCardInput)?.playerId === playerId}
+                  checked={(actionCardInput as BorrowMoneyActionCardInput).playerId === playerId}
                   onChange={(e) => {
                     setActionCardInput((actionCardInput) => ({
                       ...(actionCardInput as BorrowMoneyActionCardInput),

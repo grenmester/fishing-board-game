@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { ClientMessageType, ServerMessageType } from "../../shared/types";
+
 import type { Action, Game, GameSummary, PlayerProfile, ServerMessage } from "shared/types";
-import LobbyScreen from "./LobbyScreen";
-import RoomScreen from "./RoomScreen";
-import GameScreen from "./GameScreen";
+import { ClientMessageType, ServerMessageType } from "../../shared/types";
+
+import DebugConsole from "./components/DebugConsole";
+import GameScreen from "./screens/GameScreen";
+import LobbyScreen from "./screens/LobbyScreen";
+import RoomScreen from "./screens/RoomScreen";
 
 const App = () => {
   const [playerName, setPlayerName] = useState<string>("");
@@ -63,13 +66,17 @@ const App = () => {
     };
   }, []);
 
+  const sendMessage = (message: string) => {
+    wsRef.current?.send(message);
+  };
+
   const joinRoom = () => {
     wsRef.current?.send(
       JSON.stringify({
         type: ClientMessageType.JoinRoom,
         playerName,
         roomId,
-      })
+      }),
     );
   };
 
@@ -77,7 +84,7 @@ const App = () => {
     wsRef.current?.send(
       JSON.stringify({
         type: ClientMessageType.StartGame,
-      })
+      }),
     );
   };
 
@@ -86,7 +93,7 @@ const App = () => {
       JSON.stringify({
         type: ClientMessageType.MakeTurn,
         action,
-      })
+      }),
     );
   };
 
@@ -103,13 +110,13 @@ const App = () => {
         />
       )}
       {screen === "Room" && (
-        <RoomScreen
-          playerName={playerName}
-          roomId={roomId}
-          playerProfiles={playerProfiles}
-          gameSummary={gameSummary}
-          startGame={startGame}
-        />
+      <RoomScreen
+        playerName={playerName}
+        roomId={roomId}
+        playerProfiles={playerProfiles}
+        gameSummary={gameSummary}
+        startGame={startGame}
+      />
       )}
       {screen === "Game" && game && (
         <GameScreen
@@ -123,15 +130,7 @@ const App = () => {
       )}
       {error && <p>Error: {error}</p>}
       <hr />
-      <p>Websockets Debug Console</p>
-      <textarea
-        onChange={(e) => {
-          setDebugString(e.target.value);
-        }}
-        placeholder="WebSocket message"
-      />
-      <br />
-      <button onClick={() => wsRef.current?.send(debugString)}>Send WebSocket Message</button>
+      <DebugConsole sendMessage={sendMessage} debugString={debugString} setDebugString={setDebugString} />
     </div>
   );
 };

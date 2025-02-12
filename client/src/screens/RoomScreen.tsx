@@ -1,18 +1,20 @@
 import type { GameSummary, PlayerProfile } from "shared/types";
 
+interface RoomScreenProps {
+  playerName: string;
+  roomId: string;
+  playerProfiles: Record<string, PlayerProfile>;
+  gameSummary: GameSummary | undefined;
+  startGame: () => void;
+}
+
 const RoomScreen = ({
   playerName,
   roomId,
   playerProfiles,
   gameSummary,
   startGame,
-}: {
-  playerName: string;
-  roomId: string;
-  playerProfiles: Record<string, PlayerProfile>;
-  gameSummary: GameSummary | undefined;
-  startGame: () => void;
-}) => {
+}: RoomScreenProps) => {
   return (
     <div>
       <h2>Waiting Room</h2>
