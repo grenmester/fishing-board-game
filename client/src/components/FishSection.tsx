@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { FaFish } from "react-icons/fa6";
+import { FaFish, FaMoneyBill, FaStar } from "react-icons/fa6";
 
+import { fishDataRecord } from "../../../shared/data";
 import { type Action, ActionType, Fish } from "../../../shared/types";
+import { camelToTitleCase } from "../utils";
 
 interface FishSectionProps {
   fishList: Fish[];
@@ -66,17 +68,27 @@ const FishSection = ({ fishList, makeTurn }: FishSectionProps) => {
 interface FishCardProps {
   active: boolean;
   clickHandler: () => void;
-  fish: string;
+  fish: Fish;
 }
 
 const FishCard = ({ active, clickHandler, fish }: FishCardProps) => {
   return (
     <div
-      className={`flex flex-col gap-1 justify-between items-center p-2 w-24 h-32 bg-blue-500 rounded-lg hover:bg-blue-600 ${active ? "ring-2 ring-blue-700" : ""}`}
+      className={`flex flex-col gap-1 justify-between items-center p-2 w-32 h-40 text-white bg-blue-500 rounded-lg hover:bg-blue-600 ${active ? "ring-2 ring-blue-700" : ""}`}
       onClick={clickHandler}
     >
+      <div className="flex gap-4 self-center">
+        <div className="flex gap-1 items-center">
+          <FaStar />
+          <span>{fishDataRecord[fish].reputation}</span>
+        </div>
+        <div className="flex gap-1 items-center">
+          <FaMoneyBill />
+          <span>{fishDataRecord[fish].money}</span>
+        </div>
+      </div>
       <img className="size-16" src="favicon.png" />
-      <p className="overflow-hidden text-center text-white text-nowrap overflow-ellipsis">{fish}</p>
+      <p className="overflow-hidden font-bold text-center text-nowrap overflow-ellipsis">{camelToTitleCase(fish)}</p>
     </div>
   );
 };

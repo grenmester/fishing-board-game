@@ -56,6 +56,7 @@ const GameScreen = ({ roomId, playerProfiles, playerId, game, sendMessage }: Gam
       <FishingSection
         allowedLocations={game.turnConfig.allowedLocations}
         fishingAttempts={game.fishingAttempts}
+        location={game.location}
         makeTurn={makeTurn}
       />
       <GearSection gearList={player.gearList} makeTurn={makeTurn} />

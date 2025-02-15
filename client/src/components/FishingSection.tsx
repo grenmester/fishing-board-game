@@ -2,21 +2,20 @@ import { useState } from "react";
 import { TbFishHook } from "react-icons/tb";
 
 import { type Action, ActionType, Location } from "../../../shared/types";
+import { camelToTitleCase } from "../utils";
 
 interface FishingSectionProps {
   allowedLocations: Location[];
   fishingAttempts: number;
+  location: Location | undefined;
   makeTurn: (action: Action) => void;
 }
 
-const FishingSection = ({ allowedLocations, fishingAttempts, makeTurn }: FishingSectionProps) => {
+const FishingSection = ({ allowedLocations, fishingAttempts, location, makeTurn }: FishingSectionProps) => {
   const [locationIdx, setLocationIdx] = useState<number>();
-  const [location, setLocation] = useState<Location>();
 
   const clickLocationHandler = (idx: number) => () => {
-    if (!location) {
-      setLocationIdx(idx);
-    }
+    setLocationIdx(idx);
   };
 
   const setLocationHandler = () => {
@@ -25,7 +24,7 @@ const FishingSection = ({ allowedLocations, fishingAttempts, makeTurn }: Fishing
         actionType: ActionType.SetLocation,
         location: allowedLocations[locationIdx],
       });
-      setLocation(allowedLocations[locationIdx]);
+      setLocationIdx(undefined);
     }
   };
 
@@ -78,11 +77,11 @@ interface LocationCardProps {
 const LocationCard = ({ active, clickHandler, location }: LocationCardProps) => {
   return (
     <div
-      className={`flex flex-col gap-1 justify-between items-center p-2 w-24 h-32 bg-sky-500 rounded-lg hover:bg-sky-600 ${active ? "ring-2 ring-sky-700" : ""}`}
+      className={`flex flex-col gap-1 justify-between text-white items-center p-2 w-24 h-28 bg-sky-500 rounded-lg hover:bg-sky-600 ${active ? "ring-2 ring-sky-700" : ""}`}
       onClick={clickHandler}
     >
       <img className="size-16" src="favicon.png" />
-      <p className="overflow-hidden text-center text-white text-nowrap overflow-ellipsis">{location}</p>
+      <p className="overflow-hidden font-bold text-center text-nowrap overflow-ellipsis">{camelToTitleCase(location)}</p>
     </div>
   );
 };

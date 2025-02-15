@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { FaShop } from "react-icons/fa6";
+import { FaMoneyBill, FaShop } from "react-icons/fa6";
 
+import { gearDataRecord } from "../../../shared/data";
 import { ActionType, Gear, type Action } from "../../../shared/types";
+import { camelToTitleCase } from "../utils";
 
 interface MarketSectionProps {
   makeTurn: (action: Action) => void;
@@ -61,17 +63,21 @@ const MarketSection = ({ makeTurn, market }: MarketSectionProps) => {
 interface GearCardProps {
   active: boolean;
   clickHandler: () => void;
-  gear: string;
+  gear: Gear;
 }
 
 const GearCard = ({ active, clickHandler, gear }: GearCardProps) => {
   return (
     <div
-      className={`flex flex-col gap-1 justify-between items-center p-2 w-24 h-32 bg-red-500 rounded-lg hover:bg-red-600 ${active ? "ring-2 ring-red-700" : ""}`}
+      className={`flex flex-col gap-1 justify-between items-center p-2 w-32 h-40 text-white bg-red-500 rounded-lg hover:bg-red-600 ${active ? "ring-2 ring-red-700" : ""}`}
       onClick={clickHandler}
     >
+      <div className="flex gap-1 items-center">
+        <FaMoneyBill />
+        <span>{gearDataRecord[gear].cost}</span>
+      </div>
       <img className="size-16" src="favicon.png" />
-      <p className="overflow-hidden text-center text-white text-nowrap overflow-ellipsis">{gear}</p>
+      <p className="overflow-hidden font-bold text-center text-nowrap overflow-ellipsis">{camelToTitleCase(gear)}</p>
     </div>
   );
 };

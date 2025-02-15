@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { FaStar } from "react-icons/fa6";
 import { GiFishingPole } from "react-icons/gi";
 
+import { gearDataRecord } from "../../../shared/data";
 import { type Action, ActionType, Gear } from "../../../shared/types";
+import { camelToTitleCase } from "../utils";
 
 interface GearSectionProps {
   gearList: Gear[];
@@ -53,17 +56,21 @@ const GearSection = ({ gearList, makeTurn }: GearSectionProps) => {
 interface GearCardProps {
   active: boolean;
   clickHandler: () => void;
-  gear: string;
+  gear: Gear;
 }
 
 const GearCard = ({ active, clickHandler, gear }: GearCardProps) => {
   return (
     <div
-      className={`flex flex-col gap-1 justify-between items-center p-2 w-24 h-32 bg-gray-500 rounded-lg hover:bg-gray-600 ${active ? "ring-2 ring-gray-700" : ""}`}
+      className={`flex flex-col gap-1 justify-between items-center p-2 w-32 h-40 text-white bg-gray-500 rounded-lg hover:bg-gray-600 ${active ? "ring-2 ring-gray-700" : ""}`}
       onClick={clickHandler}
     >
+      <div className="flex gap-1 items-center">
+        <FaStar />
+        <span>{gearDataRecord[gear].reputation}</span>
+      </div>
       <img className="size-16" src="favicon.png" />
-      <p className="overflow-hidden text-center text-white text-nowrap overflow-ellipsis">{gear}</p>
+      <p className="overflow-hidden font-bold text-center text-nowrap overflow-ellipsis">{camelToTitleCase(gear)}</p>
     </div>
   );
 };

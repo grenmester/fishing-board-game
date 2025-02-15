@@ -10,6 +10,7 @@ import {
   type BorrowMoneyActionCardInput,
   type Game,
 } from "../../../shared/types";
+import { camelToTitleCase } from "../utils";
 
 interface ActionCardsSectionProps {
   actionCards: ActionCard[];
@@ -85,11 +86,11 @@ interface ActionCardCardProps {
 const ActionCardCard = ({ actionCard, active, clickHandler }: ActionCardCardProps) => {
   return (
     <div
-      className={`flex flex-col gap-1 justify-between items-center p-2 w-24 h-32 bg-purple-500 rounded-lg hover:bg-purple-600 ${active ? "ring-2 ring-purple-700" : ""}`}
+      className={`flex flex-col gap-1 justify-between items-center p-2 w-32 h-40 text-white bg-purple-500 rounded-lg hover:bg-purple-600 ${active ? "ring-2 ring-purple-700" : ""}`}
       onClick={clickHandler}
     >
       <img className="size-16" src="favicon.png" />
-      <p className="overflow-hidden text-center text-white text-nowrap overflow-ellipsis">{actionCard}</p>
+      <p className="overflow-hidden font-bold text-center overflow-ellipsis line-clamp-2">{camelToTitleCase(actionCard)}</p>
     </div>
   );
 };

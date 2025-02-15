@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "outDir": "dist",
+    "outDir": "dist"
   },
   "extends": "../tsconfig.json",
-  "include": ["src/**/*.tsx", "../shared/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "../shared/**/*.ts"]
 }
