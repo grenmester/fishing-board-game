@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { IoMdClose } from "react-icons/io";
 
-import type { Action, Game, GameSummary, PlayerProfile, ServerMessage } from "shared/types";
-import { ClientMessageType, ServerMessageType } from "../../shared/types";
+import type { Game, GameSummary, PlayerProfile, ServerMessage } from "shared/types";
+import { ServerMessageType } from "../../shared/types";
 
 import DebugConsole from "./components/DebugConsole";
 import GameScreen from "./screens/GameScreen";
@@ -9,17 +10,13 @@ import LobbyScreen from "./screens/LobbyScreen";
 import RoomScreen from "./screens/RoomScreen";
 
 const App = () => {
-  const [playerName, setPlayerName] = useState<string>("");
-  const [playerId, setPlayerId] = useState<string>("");
-  const [roomId, setRoomId] = useState<string>("");
-
   const [screen, setScreen] = useState<"Lobby" | "Room" | "Game">("Lobby");
+  const [roomId, setRoomId] = useState<string>("");
+  const [playerId, setPlayerId] = useState<string>("");
   const [playerProfiles, setPlayerProfiles] = useState<Record<string, PlayerProfile>>({});
   const [game, setGame] = useState<Game>();
   const [gameSummary, setGameSummary] = useState<GameSummary>();
-  const [debugString, setDebugString] = useState<string>("");
-
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<string>("");
 
   const wsRef = useRef<WebSocket>();
 
@@ -28,8 +25,8 @@ const App = () => {
     wsRef.current = ws;
 
     ws.onmessage = (e: MessageEvent<string>) => {
-      setError(undefined);
       const data = JSON.parse(e.data) as ServerMessage;
+
       switch (data.type) {
         case ServerMessageType.Fail:
           setError(data.error);
@@ -70,67 +67,41 @@ const App = () => {
     wsRef.current?.send(message);
   };
 
-  const joinRoom = () => {
-    wsRef.current?.send(
-      JSON.stringify({
-        type: ClientMessageType.JoinRoom,
-        playerName,
-        roomId,
-      }),
-    );
-  };
-
-  const startGame = () => {
-    wsRef.current?.send(
-      JSON.stringify({
-        type: ClientMessageType.StartGame,
-      }),
-    );
-  };
-
-  const makeTurn = (action: Action) => {
-    wsRef.current?.send(
-      JSON.stringify({
-        type: ClientMessageType.MakeTurn,
-        action,
-      }),
-    );
+  const closeErrorHandler = () => {
+    setError("");
   };
 
   return (
-    <div>
-      <h1>Fishing Board Game</h1>
-      {screen === "Lobby" && (
-        <LobbyScreen
-          playerName={playerName}
-          setPlayerName={setPlayerName}
-          roomId={roomId}
-          setRoomId={setRoomId}
-          joinRoom={joinRoom}
-        />
-      )}
+    <div className="p-4 sm:p-10">
+      <h1 className="flex justify-center m-10 text-4xl font-bold text-center">Fishing Board Game</h1>
+      {screen === "Lobby" && <LobbyScreen roomId={roomId} setRoomId={setRoomId} sendMessage={sendMessage} />}
       {screen === "Room" && (
-      <RoomScreen
-        playerName={playerName}
-        roomId={roomId}
-        playerProfiles={playerProfiles}
-        gameSummary={gameSummary}
-        startGame={startGame}
-      />
+        <RoomScreen
+          playerId={playerId}
+          roomId={roomId}
+          playerProfiles={playerProfiles}
+          gameSummary={gameSummary}
+          sendMessage={sendMessage}
+        />
       )}
       {screen === "Game" && game && (
         <GameScreen
-          playerName={playerName}
           roomId={roomId}
           playerProfiles={playerProfiles}
           playerId={playerId}
           game={game}
-          makeTurn={makeTurn}
+          sendMessage={sendMessage}
         />
       )}
-      {error && <p>Error: {error}</p>}
-      <hr />
-      <DebugConsole sendMessage={sendMessage} debugString={debugString} setDebugString={setDebugString} />
+      {error && (
+        <div className="fixed top-4 right-4">
+          <div className="flex gap-4 justify-between items-center py-2 px-4 text-red-500 bg-red-100 rounded-xl border-2 border-red-500">
+            <p className="max-w-md">Error: {error}</p>
+            <IoMdClose onClick={closeErrorHandler} />
+          </div>
+        </div>
+      )}
+      <DebugConsole sendMessage={sendMessage} />
     </div>
   );
 };
